@@ -4,7 +4,7 @@ import time
 import base64
 from datetime import datetime
 from browser_automation import BrowserAutomation
-from mistral_client import MistralClient
+from llm_clients.mistral_client import MistralClient
 from element_detector import ElementDetector
 import traceback
 import re # Added import
