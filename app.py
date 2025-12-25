@@ -4,7 +4,7 @@ import time
 import base64
 from datetime import datetime
 from browser_automation import BrowserAutomation
-from mistral_client import MistralClient
+from llm_clients import CLIENTS
 from element_detector import ElementDetector
 import traceback
 import re # Added import
@@ -15,8 +15,8 @@ def initialize_session_state():
         st.session_state.messages = []
     if 'browser' not in st.session_state:
         st.session_state.browser = None
-    if 'mistral_client' not in st.session_state:
-        st.session_state.mistral_client = None
+    if 'llm_client' not in st.session_state:
+        st.session_state.llm_client = None
     if 'element_detector' not in st.session_state:
         st.session_state.element_detector = ElementDetector()
     if 'automation_active' not in st.session_state:

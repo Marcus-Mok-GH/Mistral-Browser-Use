@@ -2,8 +2,9 @@ import requests
 import json
 import base64
 import os
+from llm_clients.base_client import BaseClient
 
-class MistralClient:
+class MistralClient(BaseClient):
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
         self.base_url = "https://api.mistral.ai/v1"
@@ -159,3 +160,4 @@ Please analyze this screenshot and determine the next action to take. The image 
             
         except Exception:
             return False
+
