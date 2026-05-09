@@ -1,2 +1,81 @@
-# Mistral-Browser-Use
-Have you always been limited to playwright on your mobile device? Try Mistral Browser Use (MBU) which searches the web using mistral free API at https://console.mistral.ai/
+# Mistral Browser Use (MBU)
+
+Mistral Browser Use is a simple project for people who want an easier way to explore the web with AI-style help on mobile devices. In this README, **MBU** is just a short name for **Mistral Browser Use**.
+
+Instead of feeling locked into heavy browser automation tools, this project focuses on a lighter idea: ask for what you need, and let Mistral Browser Use (MBU) help search and navigate using the Mistral API.
+
+---
+
+## What this project is
+
+MBU is a small, practical experiment that:
+
+- Connects to the **Mistral free API**.
+- Helps perform web-search style tasks.
+- Is aimed at people who want a more straightforward experience, especially on mobile.
+
+If you have ever felt that browser automation tools were too complex, MBU is meant to feel friendlier and more direct.
+
+---
+
+## Why MBU exists
+
+Many web-automation projects are powerful, but they can be difficult for casual use.
+
+MBU was created with a simpler goal:
+
+- Make web exploration feel approachable.
+- Reduce setup friction.
+- Give users a quick way to try AI-assisted browsing ideas.
+
+This project is a good fit for learners, tinkerers, and anyone curious about lightweight AI-powered browsing workflows.
+
+---
+
+## Who this is for
+
+You may like this project if you are:
+
+- A beginner trying AI web tools for the first time.
+- A mobile user looking for a simpler workflow.
+- A developer who wants a minimal starting point before building bigger features.
+
+---
+
+## What you need
+
+To use MBU, you mainly need:
+
+- Access to a Mistral account.
+- An API key from the Mistral console:  
+  https://console.mistral.ai/
+
+---
+
+## Current status
+
+This project is intentionally lightweight and early-stage.
+
+Think of it as a foundation you can use, test, and extend rather than a complete, polished platform.
+
+---
+
+## In plain words
+
+MBU is about making AI-assisted web use feel easier.
+
+It keeps the idea simple:
+
+1. Connect to Mistral.
+2. Ask for web help.
+3. Get results in a way that is easier to use on mobile and for everyday experimentation.
+
+---
+
+## Notes
+
+- This project uses the Mistral free API.
+- You can learn more and manage your account here:  
+  https://console.mistral.ai/
+
+If you want, future updates can add clearer setup steps, example use-cases, and screenshots so new users can get started even faster.
