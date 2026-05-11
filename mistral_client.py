@@ -5,7 +5,7 @@ import os
 
 class MistralClient:
     def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
+        self.api_key = api_key
         self.base_url = "https://api.mistral.ai/v1"
         self.model = "pixtral-large-2411"
         
@@ -158,3 +158,42 @@ Please analyze this screenshot and determine the next action to take. The image 
             
         except Exception:
             return False
+
+    def generate_chat_title(self, objective):
+        """Generate a short title for the chat based on the objective"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "model": "mistral-small-latest",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. Generate a very short (2-4 words) title for a web automation task based on the user's objective. Respond with only the title, no quotes or punctuation."
+                    },
+                    {
+                        "role": "user",
+                        "content": objective
+                    }
+                ],
+                "max_tokens": 20,
+                "temperature": 0.5
+            }
+
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=15
+            )
+
+            if response.status_code == 200:
+                return response.json()['choices'][0]['message']['content'].strip()
+        except:
+            pass
+
+        # Fallback to truncated objective
+        return objective[:30] + "..." if len(objective) > 30 else objective

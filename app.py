@@ -2,11 +2,15 @@ import streamlit as st
 import os
 import time
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from browser_automation import BrowserAutomation
 from mistral_client import MistralClient
 from element_detector import ElementDetector
 import traceback
+import extra_streamlit_components as stx
+from streamlit_local_storage import LocalStorage
+import uuid
+import json
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -22,76 +26,192 @@ def initialize_session_state():
         st.session_state.automation_active = False
     if 'current_objective' not in st.session_state:
         st.session_state.current_objective = None
-    
+    if 'mistral_api_key' not in st.session_state:
+        st.session_state.mistral_api_key = ""
+    if 'firecrawl_api_key' not in st.session_state:
+        st.session_state.firecrawl_api_key = ""
+    if 'chats' not in st.session_state:
+        st.session_state.chats = {}
+    if 'current_chat_id' not in st.session_state:
+        st.session_state.current_chat_id = None
+    if 'local_storage' not in st.session_state:
+        st.session_state.local_storage = LocalStorage()
 
-def setup_sidebar():
-    """Setup sidebar for API key configuration and controls"""
-    st.sidebar.title("🔧 Configuration")
-    
-    # API Key Configuration
-    st.sidebar.subheader("Mistral AI API Key")
-    mistral_api_key = st.sidebar.text_input(
-        "Mistral API Key",
-        value=os.getenv("MISTRAL_API_KEY", ""),
-        type="password",
-        help="Enter your Mistral AI API key"
-    )
-    
-    if mistral_api_key:
-        if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != mistral_api_key:
-            st.session_state.mistral_client = MistralClient(mistral_api_key)
-            st.sidebar.success("✅ Mistral API Key configured")
-    else:
-        st.sidebar.warning("⚠️ Please enter your Mistral AI API key")
+def delete_chat_screenshots(chat_id):
+    """Delete all screenshots associated with a chat"""
+    if chat_id in st.session_state.chats:
+        messages = st.session_state.chats[chat_id].get('messages', [])
+        for msg in messages:
+            if msg.get('type') == 'image' and os.path.exists(msg.get('content')):
+                try:
+                    os.remove(msg.get('content'))
+                except Exception as e:
+                    print(f"Error deleting screenshot {msg.get('content')}: {e}")
 
-    st.sidebar.subheader("Firecrawl API Key")
-    firecrawl_api_key = st.sidebar.text_input(
-        "Firecrawl API Key",
-        value=os.getenv("FIRECRAWL_API_KEY", ""),
-        type="password",
-        help="Enter your Firecrawl API key"
-    )
+def save_chats_to_local():
+    """Save all chats to localStorage"""
+    try:
+        # We only save metadata and messages, not the whole session state
+        serializable_chats = {}
+        for cid, chat in st.session_state.chats.items():
+            serializable_chats[cid] = {
+                'title': chat.get('title', 'Untitled Chat'),
+                'messages': chat.get('messages', [])
+            }
+        st.session_state.local_storage.setItem("mbu_chats", json.dumps(serializable_chats))
+    except Exception as e:
+        print(f"Error saving to localStorage: {e}")
 
-    if firecrawl_api_key:
-        st.sidebar.success("✅ Firecrawl API Key configured")
-    else:
-        st.sidebar.warning("⚠️ Please enter your Firecrawl API key")
+def load_chats_from_local():
+    """Load all chats from localStorage"""
+    try:
+        stored_chats = st.session_state.local_storage.getItem("mbu_chats")
+        if stored_chats:
+            st.session_state.chats = json.loads(stored_chats)
+            return True
+    except Exception as e:
+        print(f"Error loading from localStorage: {e}")
+    return False
+
+def setup_chat_menu():
+    """Setup left sidebar for chat management"""
+    st.sidebar.title("💬 Chats")
     
+    if st.sidebar.button("➕ New Chat", use_container_width=True):
+        new_id = str(uuid.uuid4())
+        st.session_state.chats[new_id] = {
+            'title': 'New Chat',
+            'messages': []
+        }
+        st.session_state.current_chat_id = new_id
+        st.session_state.messages = []
+        save_chats_to_local()
+
     st.sidebar.divider()
+
+    # List existing chats
+    for cid, chat in list(st.session_state.chats.items()):
+        col_chat, col_del = st.sidebar.columns([0.8, 0.2])
+
+        # Highlight current chat
+        is_current = (cid == st.session_state.current_chat_id)
+        chat_title = chat.get('title', 'Untitled Chat')
+        if is_current:
+            chat_title = f"👉 {chat_title}"
+
+        if col_chat.button(chat_title, key=f"btn_{cid}", use_container_width=True):
+            st.session_state.current_chat_id = cid
+            st.session_state.messages = chat.get('messages', [])
+
+        if col_del.button("🗑️", key=f"del_{cid}"):
+            delete_chat_screenshots(cid)
+            del st.session_state.chats[cid]
+            if st.session_state.current_chat_id == cid:
+                st.session_state.current_chat_id = None
+                st.session_state.messages = []
+            save_chats_to_local()
+
+def setup_configuration_panel(container):
+    """Setup right configuration panel"""
+    container.title("🔧 Configuration")
+    
+    cookie_manager = stx.CookieManager()
+
+    cookies = cookie_manager.get_all()
+    # Wait for cookies to load
+    if cookies is None:
+        return
+
+    # Load keys from cookies if session state is empty
+    if not st.session_state.mistral_api_key:
+        st.session_state.mistral_api_key = cookies.get("mistral_api_key") or ""
+    if not st.session_state.firecrawl_api_key:
+        st.session_state.firecrawl_api_key = cookies.get("firecrawl_api_key") or ""
+
+    # API Key Configuration
+    container.subheader("Mistral AI API Key")
+    mistral_api_key = container.text_input(
+        "Mistral API Key",
+        value=st.session_state.mistral_api_key,
+        type="password",
+        help="Enter your Mistral AI API key",
+        key="mistral_input"
+    )
+    
+    if mistral_api_key != st.session_state.mistral_api_key:
+        cookie_manager.set("mistral_api_key", mistral_api_key, expires_at=datetime.now() + timedelta(days=10))
+        st.session_state.mistral_api_key = mistral_api_key
+        if mistral_api_key:
+            st.session_state.mistral_client = MistralClient(mistral_api_key)
+        else:
+            st.session_state.mistral_client = None
+
+    if st.session_state.mistral_api_key:
+        if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != st.session_state.mistral_api_key:
+            try:
+                st.session_state.mistral_client = MistralClient(st.session_state.mistral_api_key)
+            except Exception as e:
+                container.error(f"Error initializing Mistral client: {e}")
+        container.success("✅ Mistral API Key configured")
+    else:
+        container.warning("⚠️ Please enter your Mistral AI API key")
+
+    container.subheader("Firecrawl API Key")
+    firecrawl_api_key = container.text_input(
+        "Firecrawl API Key",
+        value=st.session_state.firecrawl_api_key,
+        type="password",
+        help="Enter your Firecrawl API key",
+        key="firecrawl_input"
+    )
+
+    if firecrawl_api_key != st.session_state.firecrawl_api_key:
+        cookie_manager.set("firecrawl_api_key", firecrawl_api_key, expires_at=datetime.now() + timedelta(days=10))
+        st.session_state.firecrawl_api_key = firecrawl_api_key
+        if st.session_state.browser:
+            st.session_state.browser.close()
+            st.session_state.browser = None
+
+    if st.session_state.firecrawl_api_key:
+        container.success("✅ Firecrawl API Key configured")
+    else:
+        container.warning("⚠️ Please enter your Firecrawl API key")
+    
+    container.divider()
     
     # Browser Controls
-    st.sidebar.subheader("Browser Controls")
+    container.subheader("Browser Controls")
     
-    if st.sidebar.button("🚀 Start Browser", disabled=st.session_state.automation_active):
+    if container.button("🚀 Start Browser", disabled=st.session_state.automation_active, use_container_width=True):
         try:
-            if not firecrawl_api_key:
-                st.sidebar.error("❌ Firecrawl API Key is required")
+            if not st.session_state.firecrawl_api_key:
+                container.error("❌ Firecrawl API Key is required")
             else:
-                st.session_state.browser = BrowserAutomation(api_key=firecrawl_api_key)
+                st.session_state.browser = BrowserAutomation(api_key=st.session_state.firecrawl_api_key)
                 st.session_state.browser.start_browser()
-                st.sidebar.success("✅ Browser started")
+                container.success("✅ Browser started")
         except Exception as e:
-            st.sidebar.error(f"❌ Failed to start browser: {str(e)}")
+            container.error(f"❌ Failed to start browser: {str(e)}")
     
-    if st.sidebar.button("🛑 Stop Browser", disabled=not st.session_state.automation_active):
+    if container.button("🛑 Stop Browser", disabled=not st.session_state.automation_active, use_container_width=True):
         try:
             if st.session_state.browser:
                 st.session_state.browser.close()
                 st.session_state.browser = None
                 st.session_state.automation_active = False
-            st.sidebar.success("✅ Browser stopped")
+            container.success("✅ Browser stopped")
         except Exception as e:
-            st.sidebar.error(f"❌ Failed to stop browser: {str(e)}")
+            container.error(f"❌ Failed to stop browser: {str(e)}")
     
     # Status indicators
-    st.sidebar.divider()
-    st.sidebar.subheader("Status")
+    container.divider()
+    container.subheader("Status")
     
     browser_status = "🟢 Running" if st.session_state.browser and st.session_state.automation_active else "🔴 Stopped"
-    st.sidebar.write(f"Browser: {browser_status}")
+    container.write(f"Browser: {browser_status}")
     
     api_status = "🟢 Connected" if st.session_state.mistral_client else "🔴 Not configured"
-    st.sidebar.write(f"Mistral AI: {api_status}")
+    container.write(f"Mistral AI: {api_status}")
 
 def display_chat_history():
     """Display chat message history"""
@@ -119,6 +239,11 @@ def add_message(role, content, msg_type="text", caption=None):
     if caption:
         message["caption"] = caption
     st.session_state.messages.append(message)
+
+    # Update current chat in session state and local storage
+    if st.session_state.current_chat_id:
+        st.session_state.chats[st.session_state.current_chat_id]['messages'] = st.session_state.messages
+        save_chats_to_local()
 
 def take_screenshot_and_analyze():
     """Take screenshot and analyze with element detection"""
@@ -223,20 +348,40 @@ def main():
         layout="wide"
     )
     
-    st.title("🤖 Web Automation Assistant")
-    st.subheader("Powered by Mistral AI & Computer Vision")
-    
     initialize_session_state()
-    setup_sidebar()
     
-    # Main chat interface
-    st.write("Enter your automation objective and I'll help you navigate the web!")
+    # Load chats from local storage if session state is empty
+    if not st.session_state.chats:
+        if load_chats_from_local():
+            # Set current chat if none selected
+            if not st.session_state.current_chat_id and st.session_state.chats:
+                st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
+                st.session_state.messages = st.session_state.chats[st.session_state.current_chat_id].get('messages', [])
+
+    setup_chat_menu()
+
+    col_main, col_config = st.columns([3, 1])
     
-    # Display chat history
-    display_chat_history()
+    with col_main:
+        st.title("🤖 Web Automation Assistant")
+        st.subheader("Powered by Mistral AI & Computer Vision")
+
+        if not st.session_state.current_chat_id:
+            st.info("👈 Please start a new chat or select an existing one from the menu.")
+            setup_configuration_panel(col_config)
+            return
+
+        # Main chat interface
+        st.write(f"Objective: **{st.session_state.chats[st.session_state.current_chat_id].get('title')}**")
+
+        # Display chat history
+        display_chat_history()
+
+        # User input
+        user_input = st.chat_input("What would you like me to do on the web?")
     
-    # User input
-    user_input = st.chat_input("What would you like me to do on the web?")
+    with col_config:
+        setup_configuration_panel(st.container())
     
     if user_input:
         add_message("user", user_input)
@@ -256,6 +401,14 @@ def main():
         st.session_state.current_objective = user_input
         st.session_state.automation_active = True
         
+        # Automatically name chat if it's the first message
+        if len(st.session_state.messages) <= 1:
+            if st.session_state.mistral_client:
+                with st.spinner("Generating chat title..."):
+                    title = st.session_state.mistral_client.generate_chat_title(user_input)
+                    st.session_state.chats[st.session_state.current_chat_id]['title'] = title
+                    save_chats_to_local()
+
         add_message("assistant", f"Starting automation for: {user_input}")
         
         # Execute automation steps
