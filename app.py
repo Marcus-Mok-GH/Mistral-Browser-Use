@@ -36,6 +36,8 @@ def initialize_session_state():
         st.session_state.current_chat_id = None
     if 'local_storage' not in st.session_state:
         st.session_state.local_storage = LocalStorage()
+    if 'config_minimized' not in st.session_state:
+        st.session_state.config_minimized = False
 
 def delete_chat_screenshots(chat_id):
     """Delete all screenshots associated with a chat"""
@@ -112,8 +114,8 @@ def setup_chat_menu():
             save_chats_to_local()
 
 def setup_configuration_panel(container):
-    """Setup right configuration panel"""
-    container.title("🔧 Configuration")
+    """Setup right configuration panel with improved spacing and organization"""
+    # Title is now handled in the main layout for better control with the minimize button
     
     cookie_manager = stx.CookieManager()
 
@@ -128,90 +130,94 @@ def setup_configuration_panel(container):
     if not st.session_state.firecrawl_api_key:
         st.session_state.firecrawl_api_key = cookies.get("firecrawl_api_key") or ""
 
-    # API Key Configuration
-    container.subheader("Mistral AI API Key")
-    mistral_api_key = container.text_input(
-        "Mistral API Key",
-        value=st.session_state.mistral_api_key,
-        type="password",
-        help="Enter your Mistral AI API key",
-        key="mistral_input"
-    )
-    
-    if mistral_api_key != st.session_state.mistral_api_key:
-        cookie_manager.set("mistral_api_key", mistral_api_key, expires_at=datetime.now() + timedelta(days=10))
-        st.session_state.mistral_api_key = mistral_api_key
-        if mistral_api_key:
-            st.session_state.mistral_client = MistralClient(mistral_api_key)
-        else:
-            st.session_state.mistral_client = None
+    # Use tabs to reduce vertical "crowdedness"
+    tab_keys, tab_browser = container.tabs(["🔑 API Keys", "🌐 Browser"])
 
-    if st.session_state.mistral_api_key:
-        if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != st.session_state.mistral_api_key:
-            try:
-                st.session_state.mistral_client = MistralClient(st.session_state.mistral_api_key)
-            except Exception as e:
-                container.error(f"Error initializing Mistral client: {e}")
-        container.success("✅ Mistral API Key configured")
-    else:
-        container.warning("⚠️ Please enter your Mistral AI API key")
+    with tab_keys:
+        st.subheader("Mistral AI API Key")
+        mistral_api_key = st.text_input(
+            "Mistral API Key",
+            value=st.session_state.mistral_api_key,
+            type="password",
+            help="Enter your Mistral AI API key",
+            key="mistral_input"
+        )
 
-    container.subheader("Firecrawl API Key")
-    firecrawl_api_key = container.text_input(
-        "Firecrawl API Key",
-        value=st.session_state.firecrawl_api_key,
-        type="password",
-        help="Enter your Firecrawl API key",
-        key="firecrawl_input"
-    )
-
-    if firecrawl_api_key != st.session_state.firecrawl_api_key:
-        cookie_manager.set("firecrawl_api_key", firecrawl_api_key, expires_at=datetime.now() + timedelta(days=10))
-        st.session_state.firecrawl_api_key = firecrawl_api_key
-        if st.session_state.browser:
-            st.session_state.browser.close()
-            st.session_state.browser = None
-
-    if st.session_state.firecrawl_api_key:
-        container.success("✅ Firecrawl API Key configured")
-    else:
-        container.warning("⚠️ Please enter your Firecrawl API key")
-    
-    container.divider()
-    
-    # Browser Controls
-    container.subheader("Browser Controls")
-    
-    if container.button("🚀 Start Browser", disabled=st.session_state.automation_active, use_container_width=True):
-        try:
-            if not st.session_state.firecrawl_api_key:
-                container.error("❌ Firecrawl API Key is required")
+        if mistral_api_key != st.session_state.mistral_api_key:
+            cookie_manager.set("mistral_api_key", mistral_api_key, expires_at=datetime.now() + timedelta(days=10))
+            st.session_state.mistral_api_key = mistral_api_key
+            if mistral_api_key:
+                st.session_state.mistral_client = MistralClient(mistral_api_key)
             else:
-                st.session_state.browser = BrowserAutomation(api_key=st.session_state.firecrawl_api_key)
-                st.session_state.browser.start_browser()
-                container.success("✅ Browser started")
-        except Exception as e:
-            container.error(f"❌ Failed to start browser: {str(e)}")
-    
-    if container.button("🛑 Stop Browser", disabled=not st.session_state.automation_active, use_container_width=True):
-        try:
+                st.session_state.mistral_client = None
+
+        if st.session_state.mistral_api_key:
+            if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != st.session_state.mistral_api_key:
+                try:
+                    st.session_state.mistral_client = MistralClient(st.session_state.mistral_api_key)
+                except Exception as e:
+                    st.error(f"Error initializing Mistral client: {e}")
+            st.success("✅ Mistral API Key configured")
+        else:
+            st.warning("⚠️ Please enter your Mistral AI API key")
+
+        st.divider()
+
+        st.subheader("Firecrawl API Key")
+        firecrawl_api_key = st.text_input(
+            "Firecrawl API Key",
+            value=st.session_state.firecrawl_api_key,
+            type="password",
+            help="Enter your Firecrawl API key",
+            key="firecrawl_input"
+        )
+
+        if firecrawl_api_key != st.session_state.firecrawl_api_key:
+            cookie_manager.set("firecrawl_api_key", firecrawl_api_key, expires_at=datetime.now() + timedelta(days=10))
+            st.session_state.firecrawl_api_key = firecrawl_api_key
             if st.session_state.browser:
                 st.session_state.browser.close()
                 st.session_state.browser = None
-                st.session_state.automation_active = False
-            container.success("✅ Browser stopped")
-        except Exception as e:
-            container.error(f"❌ Failed to stop browser: {str(e)}")
+
+        if st.session_state.firecrawl_api_key:
+            st.success("✅ Firecrawl API Key configured")
+        else:
+            st.warning("⚠️ Please enter your Firecrawl API key")
     
-    # Status indicators
-    container.divider()
-    container.subheader("Status")
-    
-    browser_status = "🟢 Running" if st.session_state.browser and st.session_state.automation_active else "🔴 Stopped"
-    container.write(f"Browser: {browser_status}")
-    
-    api_status = "🟢 Connected" if st.session_state.mistral_client else "🔴 Not configured"
-    container.write(f"Mistral AI: {api_status}")
+    with tab_browser:
+        # Browser Controls
+        st.subheader("Browser Controls")
+
+        if st.button("🚀 Start Browser", disabled=st.session_state.automation_active, use_container_width=True):
+            try:
+                if not st.session_state.firecrawl_api_key:
+                    st.error("❌ Firecrawl API Key is required")
+                else:
+                    st.session_state.browser = BrowserAutomation(api_key=st.session_state.firecrawl_api_key)
+                    st.session_state.browser.start_browser()
+                    st.success("✅ Browser started")
+            except Exception as e:
+                st.error(f"❌ Failed to start browser: {str(e)}")
+
+        if st.button("🛑 Stop Browser", disabled=not st.session_state.automation_active, use_container_width=True):
+            try:
+                if st.session_state.browser:
+                    st.session_state.browser.close()
+                    st.session_state.browser = None
+                    st.session_state.automation_active = False
+                st.success("✅ Browser stopped")
+            except Exception as e:
+                st.error(f"❌ Failed to stop browser: {str(e)}")
+
+        # Status indicators
+        st.divider()
+        st.subheader("Current Status")
+
+        browser_status = "🟢 Running" if st.session_state.browser and st.session_state.automation_active else "🔴 Stopped"
+        st.write(f"Browser: {browser_status}")
+
+        api_status = "🟢 Connected" if st.session_state.mistral_client else "🔴 Not configured"
+        st.write(f"Mistral AI: {api_status}")
 
 def display_chat_history():
     """Display chat message history"""
@@ -349,6 +355,7 @@ def main():
     )
     
     initialize_session_state()
+    user_input = None
     
     # Load chats from local storage if session state is empty
     if not st.session_state.chats:
@@ -360,7 +367,12 @@ def main():
 
     setup_chat_menu()
 
-    col_main, col_config = st.columns([3, 1])
+    # Layout: adjusted ratios for a wider config panel when expanded
+    if st.session_state.config_minimized:
+        col_main, col_config = st.columns([10, 1])
+    else:
+        # Wider configuration panel (e.g., [2, 1] instead of [3, 1])
+        col_main, col_config = st.columns([2, 1])
     
     with col_main:
         st.title("🤖 Web Automation Assistant")
@@ -368,20 +380,31 @@ def main():
 
         if not st.session_state.current_chat_id:
             st.info("👈 Please start a new chat or select an existing one from the menu.")
-            setup_configuration_panel(col_config)
-            return
+        else:
+            # Main chat interface
+            st.write(f"Objective: **{st.session_state.chats[st.session_state.current_chat_id].get('title')}**")
 
-        # Main chat interface
-        st.write(f"Objective: **{st.session_state.chats[st.session_state.current_chat_id].get('title')}**")
+            # Display chat history
+            display_chat_history()
 
-        # Display chat history
-        display_chat_history()
-
-        # User input
-        user_input = st.chat_input("What would you like me to do on the web?")
+            # User input
+            user_input = st.chat_input("What would you like me to do on the web?")
     
     with col_config:
-        setup_configuration_panel(st.container())
+        if st.session_state.config_minimized:
+            # Expand button when minimized
+            st.button("<", help="Expand Configuration", key="expand_btn", on_click=lambda: st.session_state.update({"config_minimized": False}))
+        else:
+            # Layout for Minimize button and Title
+            # Adjusted ratio to give the button more space and prevent title wrapping
+            top_col1, top_col2 = st.columns([0.25, 0.75])
+            with top_col1:
+                st.button(">", help="Minimize Configuration", key="minimize_btn", on_click=lambda: st.session_state.update({"config_minimized": True}))
+            with top_col2:
+                # Removed redundant icon to save horizontal space
+                st.markdown("### Configuration")
+
+            setup_configuration_panel(st.container())
     
     if user_input:
         add_message("user", user_input)
