@@ -60,8 +60,8 @@ class ElementDetector:
                 draw.text((text_x, text_y), text, fill=self.text_color, font=font)
             
             # Save the annotated image
-            base_name = os.path.splitext(screenshot_path)[0]
-            annotated_path = f"{base_name}_annotated.png"
+            base_name, extension = os.path.splitext(screenshot_path)
+            annotated_path = f"{base_name}_annotated{extension}"
             annotated_image.save(annotated_path)
             
             return annotated_path
@@ -114,8 +114,8 @@ class ElementDetector:
                 draw.text((text_x, text_y), text, fill=self.text_color, font=font)
             
             # Save annotated image
-            base_name = os.path.splitext(screenshot_path)[0]
-            annotated_path = f"{base_name}_annotated.png"
+            base_name, extension = os.path.splitext(screenshot_path)
+            annotated_path = f"{base_name}_annotated{extension}"
             annotated_image.save(annotated_path)
             
             return annotated_path

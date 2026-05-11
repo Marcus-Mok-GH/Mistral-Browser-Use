@@ -48,7 +48,7 @@ def clean_old_screenshots(directory='screenshots', max_files=50):
         
         files = []
         for filename in os.listdir(directory):
-            if filename.endswith(('.png', '.jpg', '.jpeg')):
+            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                 filepath = os.path.join(directory, filename)
                 files.append((filepath, os.path.getctime(filepath)))
         

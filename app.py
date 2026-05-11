@@ -159,8 +159,13 @@ def execute_automation_step(user_objective):
         with open(annotated_image_path, 'rb') as img_file:
             image_data = base64.b64encode(img_file.read()).decode('utf-8')
         
+        # Get image format from extension
+        _, extension = os.path.splitext(annotated_image_path)
+        image_format = extension.strip('.').lower()
+        if image_format == 'jpg': image_format = 'jpeg'
+
         response = st.session_state.mistral_client.analyze_and_decide(
-            image_data, user_objective, st.session_state.current_objective
+            image_data, user_objective, st.session_state.current_objective, image_format=image_format
         )
         
         # Parse response

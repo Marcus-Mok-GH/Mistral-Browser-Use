@@ -12,7 +12,7 @@ class MistralClient:
         if not self.api_key:
             raise ValueError("Mistral API key is required")
     
-    def analyze_and_decide(self, image_base64, user_objective, current_context=None):
+    def analyze_and_decide(self, image_base64, user_objective, current_context=None, image_format="png"):
         """Analyze screenshot and decide on next action"""
         
         # Construct the prompt for analysis
@@ -68,7 +68,7 @@ Please analyze this screenshot and determine the next action to take. The image 
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/png;base64,{image_base64}"
+                                    "url": f"data:image/{image_format};base64,{image_base64}"
                                 }
                             }
                         ]
