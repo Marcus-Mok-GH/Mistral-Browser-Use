@@ -1,155 +1,161 @@
 import os
-import subprocess
 import time
+import base64
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from firecrawl import FirecrawlApp
 import traceback
+import json
 
 class BrowserAutomation:
-    def __init__(self):
-        self.driver = None
-        self.wait = None
+    def __init__(self, api_key=None):
+        self.api_key = api_key or os.getenv("FIRECRAWL_API_KEY")
+        if not self.api_key:
+            raise ValueError("Firecrawl API key is required")
+        self.app = FirecrawlApp(api_key=self.api_key)
+        self.session_id = None
         self.screenshot_counter = 1
-        self.element_map = {}  # Maps indexes to elements
+        self.element_map = {}  # Maps indexes to elements info
         
-    def find_firefox_binary(self):
-        """Find Firefox binary path using subprocess"""
-        possible_paths = [
-            '/usr/bin/firefox',
-            '/usr/local/bin/firefox',
-            '/opt/firefox/firefox',
-            '/snap/bin/firefox',
-            'firefox'  # In PATH
-        ]
-        
-        for path in possible_paths:
-            try:
-                result = subprocess.run(['which', path], capture_output=True, text=True)
-                if result.returncode == 0:
-                    return result.stdout.strip()
-            except:
-                continue
-        
-        # Try using 'which' command
-        try:
-            result = subprocess.run(['which', 'firefox'], capture_output=True, text=True)
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except:
-            pass
-        
-        raise Exception("Firefox binary not found. Please install Firefox.")
-    
     def start_browser(self):
-        """Start Firefox browser in headful mode"""
+        """Start Firecrawl browser session"""
         try:
-            # Find Firefox binary
-            firefox_binary = self.find_firefox_binary()
-            
-            # Setup Firefox options
-            options = Options()
-            options.binary_location = firefox_binary
-            
-            # Configure for headful mode with some optimizations
-            options.add_argument('--width=1920')
-            options.add_argument('--height=1080')
-            options.set_preference('dom.webdriver.enabled', False)
-            options.set_preference('useAutomationExtension', False)
-            options.set_preference('general.useragent.override', 
-                                 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0')
-            
             # Create screenshots directory if it doesn't exist
             os.makedirs('screenshots', exist_ok=True)
             
-            # Start the browser
-            self.driver = webdriver.Firefox(options=options)
-            self.wait = WebDriverWait(self.driver, 10)
+            # Launch a session
+            response = self.app.browser()
+            
+            if hasattr(response, 'id'):
+                self.session_id = response.id
+            elif isinstance(response, dict):
+                self.session_id = response.get('id')
+            
+            if not self.session_id:
+                error_msg = getattr(response, 'error', 'Unknown error') if hasattr(response, 'error') else 'Failed to get session ID'
+                raise Exception(f"Failed to start Firecrawl browser: {error_msg}")
+            
+            print(f"Firecrawl browser session started: {self.session_id}")
             
             # Navigate to a default page
-            self.driver.get('https://www.google.com')
-            time.sleep(2)
+            self.navigate_to('https://www.google.com')
             
-            print("Firefox browser started successfully")
             return True
             
         except Exception as e:
-            print(f"Failed to start browser: {str(e)}")
+            print(f"Failed to start Firecrawl browser: {str(e)}")
             print(traceback.format_exc())
             raise e
     
     def take_screenshot(self):
-        """Take a screenshot and save it with a simple name"""
-        if not self.driver:
+        """Take a screenshot using Playwright in the sandbox"""
+        if not self.session_id:
             raise Exception("Browser not started")
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"screenshot_{self.screenshot_counter:03d}_{timestamp}.png"
-        filepath = os.path.join('screenshots', filename)
-        
-        self.driver.save_screenshot(filepath)
-        self.screenshot_counter += 1
-        
-        return filepath
+        try:
+            # Use playwright-based screenshot
+            code = """
+            const screenshot = await page.screenshot({ fullPage: false });
+            console.log(screenshot.toString('base64'));
+            """
+            result = self.app.browser_execute(self.session_id, code, language="node")
+
+            # The result object attributes: success, stdout, result, stderr, etc.
+            if not result.success:
+                raise Exception(f"Failed to take screenshot: {result.stderr}")
+
+            image_data = result.stdout.strip()
+            # If there's multiple things in stdout, try to find the base64 part
+            if '\n' in image_data:
+                image_data = image_data.split('\n')[-1].strip()
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"screenshot_{self.screenshot_counter:03d}_{timestamp}.png"
+            filepath = os.path.join('screenshots', filename)
+
+            with open(filepath, "wb") as f:
+                f.write(base64.b64decode(image_data))
+
+            self.screenshot_counter += 1
+            return filepath
+
+        except Exception as e:
+            print(f"Error taking screenshot: {str(e)}")
+            raise e
     
     def get_interactable_elements(self):
-        """Get all interactable elements on the page"""
-        if not self.driver:
+        """Get all interactable elements using Playwright in the sandbox"""
+        if not self.session_id:
             raise Exception("Browser not started")
         
-        # Selectors for interactable elements
-        selectors = [
-            'a',  # Links
-            'button',  # Buttons
-            'input[type="text"]',  # Text inputs
-            'input[type="email"]',  # Email inputs
-            'input[type="password"]',  # Password inputs
-            'input[type="search"]',  # Search inputs
-            'input[type="submit"]',  # Submit buttons
-            'input[type="button"]',  # Input buttons
-            'textarea',  # Text areas
-            'select',  # Dropdowns
-            '[onclick]',  # Elements with onclick
-            '[role="button"]',  # ARIA buttons
-            '[tabindex]',  # Focusable elements
-            '.btn',  # Bootstrap buttons
-            '.button',  # Common button classes
-        ]
+        code = """
+        const elements = await page.evaluate(() => {
+            const interactableSelectors = [
+                'a', 'button', 'input', 'textarea', 'select',
+                '[onclick]', '[role="button"]', '[tabindex]',
+                '.btn', '.button'
+            ];
+
+            const found = [];
+            interactableSelectors.forEach(selector => {
+                document.querySelectorAll(selector).forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0 &&
+                        window.getComputedStyle(el).visibility !== 'hidden' &&
+                        window.getComputedStyle(el).display !== 'none') {
+                        found.push({
+                            x: rect.left,
+                            y: rect.top,
+                            width: rect.width,
+                            height: rect.height,
+                            tagName: el.tagName,
+                            type: el.type,
+                            text: (el.innerText || el.value || '').substring(0, 50)
+                        });
+                    }
+                });
+            });
+
+            // Deduplicate (approximate by position)
+            const unique = [];
+            const seen = new Set();
+            for (const el of found) {
+                const key = `${Math.round(el.x)},${Math.round(el.y)}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    unique.push(el);
+                }
+            }
+
+            return unique.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+        });
+        console.log(JSON.stringify(elements));
+        """
         
-        elements = []
-        for selector in selectors:
-            try:
-                found_elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in found_elements:
-                    # Check if element is visible and interactable
-                    if (element.is_displayed() and 
-                        element.is_enabled() and 
-                        element.size['height'] > 0 and 
-                        element.size['width'] > 0):
-                        elements.append(element)
-            except:
-                continue
-        
-        # Remove duplicates and sort by position (top-left to bottom-right)
-        unique_elements = list(set(elements))
-        unique_elements.sort(key=lambda el: (el.location['y'], el.location['x']))
-        
-        # Create mapping
-        self.element_map = {}
-        for i, element in enumerate(unique_elements, 1):
-            self.element_map[i] = element
-        
-        return self.element_map
+        try:
+            result = self.app.browser_execute(self.session_id, code, language="node")
+
+            if not result.success:
+                raise Exception(f"Failed to get elements: {result.stderr}")
+
+            elements_json = result.stdout.strip()
+            if '\n' in elements_json:
+                elements_json = elements_json.split('\n')[-1].strip()
+
+            elements = json.loads(elements_json)
+
+            self.element_map = {}
+            for i, element in enumerate(elements, 1):
+                self.element_map[i] = element
+
+            return self.element_map
+
+        except Exception as e:
+            print(f"Error getting elements: {str(e)}")
+            return {}
     
     def click_element_by_index(self, index):
         """Click an element by its index"""
-        if not self.driver:
+        if not self.session_id:
             raise Exception("Browser not started")
         
         if index not in self.element_map:
@@ -157,113 +163,118 @@ class BrowserAutomation:
         
         element = self.element_map[index]
         
+        code = f"""
+        await page.mouse.click({element['x'] + element['width']/2}, {element['y'] + element['height']/2});
+        """
+
         try:
-            # Scroll element into view
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-            time.sleep(0.5)
+            result = self.app.browser_execute(self.session_id, code, language="node")
             
-            # Try regular click first
-            element.click()
-            
+            if not result.success:
+                raise Exception(f"Failed to click: {result.stderr}")
+
+            time.sleep(1)
         except Exception as e:
-            try:
-                # If regular click fails, try JavaScript click
-                self.driver.execute_script("arguments[0].click();", element)
-            except Exception as js_e:
-                try:
-                    # If that fails, try ActionChains
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(element).click().perform()
-                except Exception as ac_e:
-                    raise Exception(f"Failed to click element: {str(e)}, JS: {str(js_e)}, AC: {str(ac_e)}")
-        
-        time.sleep(1)  # Wait for page to respond
+            raise Exception(f"Failed to click element: {str(e)}")
     
     def type_text(self, text, element_description):
-        """Type text into an element (find by description or use last focused input)"""
-        if not self.driver:
+        """Type text into an element found by description"""
+        if not self.session_id:
             raise Exception("Browser not started")
         
-        # Try to find input elements that match the description
-        input_selectors = [
-            'input[type="text"]',
-            'input[type="email"]',
-            'input[type="password"]',
-            'input[type="search"]',
-            'textarea'
-        ]
+        code = f"""
+        // Find element by description
+        const description = "{element_description.replace('"', '\\"').lower()}";
+        const target = await page.evaluate((desc) => {{
+            const inputs = Array.from(document.querySelectorAll('input, textarea'));
+            return inputs.find(el => {{
+                const placeholder = (el.placeholder || '').toLowerCase();
+                const name = (el.name || '').toLowerCase();
+                const id = (el.id || '').toLowerCase();
+                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+
+                return placeholder.includes(desc) ||
+                       name.includes(desc) ||
+                       id.includes(desc) ||
+                       ariaLabel.includes(desc);
+            }})?.getBoundingClientRect();
+        }}, description);
         
-        target_element = None
+        if (target) {{
+            await page.mouse.click(target.left + target.width/2, target.top + target.height/2);
+            await page.keyboard.type("{text.replace('"', '\\"')}");
+            await page.keyboard.press('Enter');
+        }} else {{
+            // Fallback: try to just type if an element is focused, or find ANY visible input
+            await page.keyboard.type("{text.replace('"', '\\"')}");
+            await page.keyboard.press('Enter');
+        }}
+        """
         
-        # First, try to find by placeholder, name, or id containing the description
-        for selector in input_selectors:
-            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-            for element in elements:
-                if (element.is_displayed() and element.is_enabled()):
-                    placeholder = element.get_attribute('placeholder') or ''
-                    name = element.get_attribute('name') or ''
-                    id_attr = element.get_attribute('id') or ''
-                    
-                    if (element_description.lower() in placeholder.lower() or
-                        element_description.lower() in name.lower() or
-                        element_description.lower() in id_attr.lower()):
-                        target_element = element
-                        break
-            if target_element:
-                break
-        
-        # If not found, use the first visible input field
-        if not target_element:
-            for selector in input_selectors:
-                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    if element.is_displayed() and element.is_enabled():
-                        target_element = element
-                        break
-                if target_element:
-                    break
-        
-        if not target_element:
-            raise Exception(f"No suitable input field found for: {element_description}")
-        
-        # Clear the field and type text
         try:
-            target_element.clear()
-            target_element.send_keys(text)
-            time.sleep(0.5)
+            result = self.app.browser_execute(self.session_id, code, language="node")
+
+            if not result.success:
+                raise Exception(f"Failed to type: {result.stderr}")
+
+            time.sleep(1)
         except Exception as e:
             raise Exception(f"Failed to type text: {str(e)}")
     
     def navigate_to(self, url):
         """Navigate to a specific URL"""
-        if not self.driver:
+        if not self.session_id:
             raise Exception("Browser not started")
         
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
         
-        self.driver.get(url)
-        time.sleep(3)  # Wait for page to load
+        code = f'await page.goto("{url}", {{ waitUntil: "networkidle" }});'
+
+        try:
+            result = self.app.browser_execute(self.session_id, code, language="node")
+
+            if not result.success:
+                # Try without networkidle if it fails
+                code = f'await page.goto("{url}");'
+                self.app.browser_execute(self.session_id, code, language="node")
+
+            time.sleep(2)
+        except Exception as e:
+            raise Exception(f"Failed to navigate to {url}: {str(e)}")
     
     def get_page_info(self):
         """Get current page information"""
-        if not self.driver:
+        if not self.session_id:
             raise Exception("Browser not started")
         
-        return {
-            'title': self.driver.title,
-            'url': self.driver.current_url,
-            'page_source_length': len(self.driver.page_source)
-        }
+        code = """
+        console.log(JSON.stringify({
+            title: await page.title(),
+            url: page.url()
+        }));
+        """
+
+        try:
+            result = self.app.browser_execute(self.session_id, code, language="node")
+
+            if result.success:
+                output = result.stdout.strip()
+                if '\n' in output:
+                    output = output.split('\n')[-1].strip()
+                return json.loads(output)
+        except:
+            pass
+
+        return {'title': 'Unknown', 'url': 'Unknown'}
     
     def close(self):
-        """Close the browser"""
-        if self.driver:
+        """Close the Firecrawl browser session"""
+        if self.session_id:
             try:
-                self.driver.quit()
+                self.app.delete_browser(self.session_id)
             except:
                 pass
-            self.driver = None
-            self.wait = None
+            self.session_id = None
             self.element_map = {}
-            print("Browser closed")
+            print("Firecrawl browser session closed")

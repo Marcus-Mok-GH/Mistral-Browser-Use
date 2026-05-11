@@ -30,19 +30,32 @@ def setup_sidebar():
     
     # API Key Configuration
     st.sidebar.subheader("Mistral AI API Key")
-    api_key = st.sidebar.text_input(
-        "API Key", 
+    mistral_api_key = st.sidebar.text_input(
+        "Mistral API Key",
         value=os.getenv("MISTRAL_API_KEY", ""),
         type="password",
         help="Enter your Mistral AI API key"
     )
     
-    if api_key:
-        if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != api_key:
-            st.session_state.mistral_client = MistralClient(api_key)
-            st.sidebar.success("✅ API Key configured")
+    if mistral_api_key:
+        if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != mistral_api_key:
+            st.session_state.mistral_client = MistralClient(mistral_api_key)
+            st.sidebar.success("✅ Mistral API Key configured")
     else:
         st.sidebar.warning("⚠️ Please enter your Mistral AI API key")
+
+    st.sidebar.subheader("Firecrawl API Key")
+    firecrawl_api_key = st.sidebar.text_input(
+        "Firecrawl API Key",
+        value=os.getenv("FIRECRAWL_API_KEY", ""),
+        type="password",
+        help="Enter your Firecrawl API key"
+    )
+
+    if firecrawl_api_key:
+        st.sidebar.success("✅ Firecrawl API Key configured")
+    else:
+        st.sidebar.warning("⚠️ Please enter your Firecrawl API key")
     
     st.sidebar.divider()
     
@@ -51,9 +64,12 @@ def setup_sidebar():
     
     if st.sidebar.button("🚀 Start Browser", disabled=st.session_state.automation_active):
         try:
-            st.session_state.browser = BrowserAutomation()
-            st.session_state.browser.start_browser()
-            st.sidebar.success("✅ Browser started")
+            if not firecrawl_api_key:
+                st.sidebar.error("❌ Firecrawl API Key is required")
+            else:
+                st.session_state.browser = BrowserAutomation(api_key=firecrawl_api_key)
+                st.session_state.browser.start_browser()
+                st.sidebar.success("✅ Browser started")
         except Exception as e:
             st.sidebar.error(f"❌ Failed to start browser: {str(e)}")
     

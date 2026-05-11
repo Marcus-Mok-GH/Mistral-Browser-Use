@@ -1,8 +1,6 @@
-import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import os
-from selenium.webdriver.common.by import By
 
 class ElementDetector:
     def __init__(self):
@@ -128,7 +126,7 @@ class ElementDetector:
     
     def get_element_positions_from_browser(self, browser_automation):
         """Extract element positions from browser automation instance"""
-        if not browser_automation or not browser_automation.driver:
+        if not browser_automation or not browser_automation.session_id:
             return {}
         
         try:
@@ -138,14 +136,11 @@ class ElementDetector:
             positions = {}
             for index, element in element_map.items():
                 try:
-                    location = element.location
-                    size = element.size
-                    
                     positions[index] = (
-                        location['x'],
-                        location['y'],
-                        size['width'],
-                        size['height']
+                        element['x'],
+                        element['y'],
+                        element['width'],
+                        element['height']
                     )
                 except:
                     continue
