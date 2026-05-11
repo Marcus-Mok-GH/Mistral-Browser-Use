@@ -1,56 +1,8 @@
 import os
-import subprocess
 import platform
-import shutil
 from datetime import datetime
 import base64
 import json
-
-def find_firefox_binary():
-    """Find Firefox binary across different systems"""
-    system = platform.system().lower()
-    
-    if system == "linux":
-        possible_paths = [
-            '/usr/bin/firefox',
-            '/usr/local/bin/firefox',
-            '/opt/firefox/firefox',
-            '/snap/bin/firefox',
-            shutil.which('firefox')
-        ]
-    elif system == "darwin":  # macOS
-        possible_paths = [
-            '/Applications/Firefox.app/Contents/MacOS/firefox',
-            '/usr/local/bin/firefox',
-            shutil.which('firefox')
-        ]
-    elif system == "windows":
-        possible_paths = [
-            'C:\\Program Files\\Mozilla Firefox\\firefox.exe',
-            'C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe',
-            shutil.which('firefox.exe')
-        ]
-    else:
-        possible_paths = [shutil.which('firefox')]
-    
-    for path in possible_paths:
-        if path and os.path.exists(path):
-            return path
-    
-    # Try using system commands
-    try:
-        if system in ["linux", "darwin"]:
-            result = subprocess.run(['which', 'firefox'], capture_output=True, text=True)
-            if result.returncode == 0:
-                return result.stdout.strip()
-        elif system == "windows":
-            result = subprocess.run(['where', 'firefox'], capture_output=True, text=True)
-            if result.returncode == 0:
-                return result.stdout.strip().split('\n')[0]
-    except:
-        pass
-    
-    return None
 
 def ensure_directory_exists(directory_path):
     """Ensure a directory exists, create if it doesn't"""
@@ -137,8 +89,7 @@ def get_system_info():
     info = {
         'platform': platform.system(),
         'architecture': platform.architecture(),
-        'python_version': platform.python_version(),
-        'firefox_binary': find_firefox_binary()
+        'python_version': platform.python_version()
     }
     return info
 
