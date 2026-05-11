@@ -393,13 +393,13 @@ def main():
     with col_config:
         if st.session_state.config_minimized:
             # Expand button when minimized
-            st.button("🛠️", help="Expand Configuration", key="expand_btn", on_click=lambda: st.session_state.update({"config_minimized": False}))
+            st.button("<", help="Expand Configuration", key="expand_btn", on_click=lambda: st.session_state.update({"config_minimized": False}))
         else:
             # Layout for Minimize button and Title
             # Adjusted ratio to give the button more space and prevent title wrapping
             top_col1, top_col2 = st.columns([0.25, 0.75])
             with top_col1:
-                st.button("➖", help="Minimize Configuration", key="minimize_btn", on_click=lambda: st.session_state.update({"config_minimized": True}))
+                st.button(">", help="Minimize Configuration", key="minimize_btn", on_click=lambda: st.session_state.update({"config_minimized": True}))
             with top_col2:
                 # Removed redundant icon to save horizontal space
                 st.markdown("### Configuration")
