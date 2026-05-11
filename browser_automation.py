@@ -5,6 +5,8 @@ from datetime import datetime
 from firecrawl import FirecrawlApp
 import traceback
 import json
+import io
+from PIL import Image
 
 class BrowserAutomation:
     def __init__(self, api_key=None):
@@ -68,12 +70,22 @@ class BrowserAutomation:
             if '\n' in image_data:
                 image_data = image_data.split('\n')[-1].strip()
 
+            image_bytes = base64.b64decode(image_data)
+
+            # Detect image format
+            try:
+                img = Image.open(io.BytesIO(image_bytes))
+                extension = img.format.lower()
+            except Exception as e:
+                print(f"Warning: Could not detect image format, defaulting to png: {e}")
+                extension = "png"
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"screenshot_{self.screenshot_counter:03d}_{timestamp}.png"
+            filename = f"screenshot_{self.screenshot_counter:03d}_{timestamp}.{extension}"
             filepath = os.path.join('screenshots', filename)
 
             with open(filepath, "wb") as f:
-                f.write(base64.b64decode(image_data))
+                f.write(image_bytes)
 
             self.screenshot_counter += 1
             return filepath
