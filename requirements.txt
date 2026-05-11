@@ -2,3 +2,5 @@ opencv-python-headless
 Pillow
 firecrawl-py
 streamlit
+extra-streamlit-components
+streamlit-local-storage

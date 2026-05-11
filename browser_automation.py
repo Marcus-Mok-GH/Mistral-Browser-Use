@@ -10,7 +10,7 @@ from PIL import Image
 
 class BrowserAutomation:
     def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv("FIRECRAWL_API_KEY")
+        self.api_key = api_key
         if not self.api_key:
             raise ValueError("Firecrawl API key is required")
         self.app = FirecrawlApp(api_key=self.api_key)
