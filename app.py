@@ -49,21 +49,26 @@ def setup_sidebar():
     # Browser Controls
     st.sidebar.subheader("Browser Controls")
     
-    if st.sidebar.button("🚀 Start Browser", disabled=st.session_state.automation_active):
+    if st.sidebar.button("🚀 Start Browser", disabled=st.session_state.browser is not None):
         try:
             st.session_state.browser = BrowserAutomation()
             st.session_state.browser.start_browser()
+            st.session_state.automation_active = False # Browser started, but automation not yet active
             st.sidebar.success("✅ Browser started")
+            time.sleep(1) # Give user a moment to see the success message
+            st.rerun()
         except Exception as e:
             st.sidebar.error(f"❌ Failed to start browser: {str(e)}")
     
-    if st.sidebar.button("🛑 Stop Browser", disabled=not st.session_state.automation_active):
+    if st.sidebar.button("🛑 Stop Browser", disabled=st.session_state.browser is None):
         try:
             if st.session_state.browser:
                 st.session_state.browser.close()
                 st.session_state.browser = None
                 st.session_state.automation_active = False
             st.sidebar.success("✅ Browser stopped")
+            time.sleep(1) # Give user a moment to see the success message
+            st.rerun()
         except Exception as e:
             st.sidebar.error(f"❌ Failed to stop browser: {str(e)}")
     
@@ -71,7 +76,7 @@ def setup_sidebar():
     st.sidebar.divider()
     st.sidebar.subheader("Status")
     
-    browser_status = "🟢 Running" if st.session_state.browser and st.session_state.automation_active else "🔴 Stopped"
+    browser_status = "🟢 Running" if st.session_state.browser else "🔴 Stopped"
     st.sidebar.write(f"Browser: {browser_status}")
     
     api_status = "🟢 Connected" if st.session_state.mistral_client else "🔴 Not configured"
