@@ -44,11 +44,19 @@ You may like this project if you are:
 
 ## What you need
 
-To use MBU, you mainly need:
+To use MBU, you mainly need one of the following:
 
-- Access to a Mistral account.
-- An API key from the Mistral console:  
-  https://console.mistral.ai/
+- **Mistral AI:** Access to a Mistral account and an API key from the [Mistral Console](https://console.mistral.ai/).
+- **Fireworks (Kimi K2.6):** A built-in provider that doesn't require a personal API key.
+
+---
+
+## Usage Limits
+
+To ensure fair usage, MBU includes a request limit:
+
+- **Weekly Limit:** 20 requests per week.
+- **Renewal:** If you hit the limit, you can use the renewal code `2026CODERENEWAL` in the chat panel to reset your counter instantly.
 
 ---
 
