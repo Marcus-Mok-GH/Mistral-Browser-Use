@@ -7,7 +7,12 @@ import importlib
 
 
 def _import_local_symbol(module_name, symbol_name):
-    """Import a symbol from a local module with a retry for Python 3.14 import edge-cases."""
+    """Import a symbol from a local module with a retry for Python 3.14 import edge-cases.
+
+    Python 3.14 can sometimes raise KeyError during initial import attempts
+    due to changes in the import system. This function retries once after clearing any
+    partially-loaded module state, ensuring compatibility across Python 3.12+ versions.
+    """
     try:
         module = importlib.import_module(module_name)
     except KeyError:
@@ -16,6 +21,7 @@ def _import_local_symbol(module_name, symbol_name):
         import sys
         sys.modules.pop(module_name, None)
         module = importlib.import_module(module_name)
+
     return getattr(module, symbol_name)
 
 
