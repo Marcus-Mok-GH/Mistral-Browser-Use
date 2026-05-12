@@ -5,6 +5,7 @@ import base64
 from datetime import datetime, timedelta
 from browser_automation import BrowserAutomation
 from mistral_client import MistralClient
+from fireworks_client import FireworksClient
 from element_detector import ElementDetector
 import traceback
 import extra_streamlit_components as stx
@@ -18,8 +19,10 @@ def initialize_session_state():
         st.session_state.messages = []
     if 'browser' not in st.session_state:
         st.session_state.browser = None
-    if 'mistral_client' not in st.session_state:
-        st.session_state.mistral_client = None
+    if 'ai_client' not in st.session_state:
+        st.session_state.ai_client = None
+    if 'ai_provider' not in st.session_state:
+        st.session_state.ai_provider = "Mistral"
     if 'element_detector' not in st.session_state:
         st.session_state.element_detector = ElementDetector()
     if 'automation_active' not in st.session_state:
@@ -38,6 +41,11 @@ def initialize_session_state():
         st.session_state.local_storage = LocalStorage()
     if 'config_minimized' not in st.session_state:
         st.session_state.config_minimized = False
+    if 'usage_data' not in st.session_state:
+        st.session_state.usage_data = {
+            'count': 0,
+            'reset_date': (datetime.now() + timedelta(days=7)).isoformat()
+        }
 
 def delete_chat_screenshots(chat_id):
     """Delete all screenshots associated with a chat"""
@@ -51,7 +59,7 @@ def delete_chat_screenshots(chat_id):
                     print(f"Error deleting screenshot {msg.get('content')}: {e}")
 
 def save_chats_to_local():
-    """Save all chats to localStorage"""
+    """Save all chats and usage data to localStorage"""
     try:
         # We only save metadata and messages, not the whole session state
         serializable_chats = {}
@@ -61,12 +69,27 @@ def save_chats_to_local():
                 'messages': chat.get('messages', [])
             }
         st.session_state.local_storage.setItem("mbu_chats", json.dumps(serializable_chats))
+
+        # Save usage data
+        st.session_state.local_storage.setItem("mbu_usage", json.dumps(st.session_state.usage_data))
     except Exception as e:
         print(f"Error saving to localStorage: {e}")
 
 def load_chats_from_local():
-    """Load all chats from localStorage"""
+    """Load all chats and usage data from localStorage"""
     try:
+        # Load usage data
+        stored_usage = st.session_state.local_storage.getItem("mbu_usage")
+        if stored_usage:
+            st.session_state.usage_data = json.loads(stored_usage)
+            # Check for weekly reset
+            reset_date = datetime.fromisoformat(st.session_state.usage_data.get('reset_date'))
+            if datetime.now() > reset_date:
+                st.session_state.usage_data = {
+                    'count': 0,
+                    'reset_date': (datetime.now() + timedelta(days=7)).isoformat()
+                }
+
         stored_chats = st.session_state.local_storage.getItem("mbu_chats")
         if stored_chats:
             st.session_state.chats = json.loads(stored_chats)
@@ -124,42 +147,69 @@ def setup_configuration_panel(container):
     if cookies is None:
         return
 
-    # Load keys from cookies if session state is empty
+    # Load settings from cookies if session state is empty
     if not st.session_state.mistral_api_key:
         st.session_state.mistral_api_key = cookies.get("mistral_api_key") or ""
     if not st.session_state.firecrawl_api_key:
         st.session_state.firecrawl_api_key = cookies.get("firecrawl_api_key") or ""
 
-    # Use tabs to reduce vertical "crowdedness"
-    tab_keys, tab_browser = container.tabs(["🔑 API Keys", "🌐 Browser"])
+    saved_provider = cookies.get("ai_provider")
+    if saved_provider and st.session_state.ai_provider != saved_provider:
+         st.session_state.ai_provider = saved_provider
 
-    with tab_keys:
-        st.subheader("Mistral AI API Key")
-        mistral_api_key = st.text_input(
-            "Mistral API Key",
-            value=st.session_state.mistral_api_key,
-            type="password",
-            help="Enter your Mistral AI API key",
-            key="mistral_input"
+    # Use tabs to reduce vertical "crowdedness"
+    tab_provider, tab_browser = container.tabs(["🤖 Provider", "🌐 Browser"])
+
+    with tab_provider:
+        st.subheader("AI Provider")
+        providers = ["Mistral", "Fireworks"]
+        current_provider_index = providers.index(st.session_state.ai_provider) if st.session_state.ai_provider in providers else 0
+
+        selected_provider = st.selectbox(
+            "Select Provider",
+            options=providers,
+            index=current_provider_index,
+            key="provider_select"
         )
 
-        if mistral_api_key != st.session_state.mistral_api_key:
-            cookie_manager.set("mistral_api_key", mistral_api_key, expires_at=datetime.now() + timedelta(days=10))
-            st.session_state.mistral_api_key = mistral_api_key
-            if mistral_api_key:
-                st.session_state.mistral_client = MistralClient(mistral_api_key)
-            else:
-                st.session_state.mistral_client = None
+        if selected_provider != st.session_state.ai_provider:
+            st.session_state.ai_provider = selected_provider
+            cookie_manager.set("ai_provider", selected_provider, expires_at=datetime.now() + timedelta(days=10))
+            st.session_state.ai_client = None # Reset client to force re-init
+            st.rerun()
 
-        if st.session_state.mistral_api_key:
-            if st.session_state.mistral_client is None or st.session_state.mistral_client.api_key != st.session_state.mistral_api_key:
-                try:
-                    st.session_state.mistral_client = MistralClient(st.session_state.mistral_api_key)
-                except Exception as e:
-                    st.error(f"Error initializing Mistral client: {e}")
-            st.success("✅ Mistral API Key configured")
-        else:
-            st.warning("⚠️ Please enter your Mistral AI API key")
+        if st.session_state.ai_provider == "Mistral":
+            st.subheader("Mistral AI API Key")
+            mistral_api_key = st.text_input(
+                "Mistral API Key",
+                value=st.session_state.mistral_api_key,
+                type="password",
+                help="Enter your Mistral AI API key",
+                key="mistral_input"
+            )
+
+            if mistral_api_key != st.session_state.mistral_api_key:
+                cookie_manager.set("mistral_api_key", mistral_api_key, expires_at=datetime.now() + timedelta(days=10))
+                st.session_state.mistral_api_key = mistral_api_key
+                if mistral_api_key:
+                    st.session_state.ai_client = MistralClient(mistral_api_key)
+                else:
+                    st.session_state.ai_client = None
+
+            if st.session_state.mistral_api_key:
+                if st.session_state.ai_client is None or not isinstance(st.session_state.ai_client, MistralClient):
+                    try:
+                        st.session_state.ai_client = MistralClient(st.session_state.mistral_api_key)
+                    except Exception as e:
+                        st.error(f"Error initializing Mistral client: {e}")
+                st.success("✅ Mistral API Key configured")
+            else:
+                st.warning("⚠️ Please enter your Mistral AI API key")
+
+        elif st.session_state.ai_provider == "Fireworks":
+            if st.session_state.ai_client is None or not isinstance(st.session_state.ai_client, FireworksClient):
+                st.session_state.ai_client = FireworksClient()
+            st.success(f"✅ Fireworks configured (Model: {st.session_state.ai_client.model})")
 
         st.divider()
 
@@ -216,8 +266,8 @@ def setup_configuration_panel(container):
         browser_status = "🟢 Running" if st.session_state.browser and st.session_state.automation_active else "🔴 Stopped"
         st.write(f"Browser: {browser_status}")
 
-        api_status = "🟢 Connected" if st.session_state.mistral_client else "🔴 Not configured"
-        st.write(f"Mistral AI: {api_status}")
+        api_status = "🟢 Connected" if st.session_state.ai_client else "🔴 Not configured"
+        st.write(f"{st.session_state.ai_provider}: {api_status}")
 
 def display_chat_history():
     """Display chat message history"""
@@ -275,8 +325,8 @@ def take_screenshot_and_analyze():
 def execute_automation_step(user_objective):
     """Execute one step of the automation process"""
     try:
-        if not st.session_state.mistral_client:
-            raise Exception("Mistral AI client not configured")
+        if not st.session_state.ai_client:
+            raise Exception(f"{st.session_state.ai_provider} AI client not configured")
         
         if not st.session_state.browser:
             raise Exception("Browser not started")
@@ -295,7 +345,11 @@ def execute_automation_step(user_objective):
         image_format = extension.strip('.').lower()
         if image_format == 'jpg': image_format = 'jpeg'
 
-        response = st.session_state.mistral_client.analyze_and_decide(
+        # Increment usage count for the analysis request
+        st.session_state.usage_data['count'] += 1
+        save_chats_to_local()
+
+        response = st.session_state.ai_client.analyze_and_decide(
             image_data, user_objective, st.session_state.current_objective, image_format=image_format
         )
         
@@ -389,6 +443,30 @@ def main():
 
             # User input
             user_input = st.chat_input("What would you like me to do on the web?")
+
+            # Display usage and promo code at the bottom middle
+            st.divider()
+            usage_col1, usage_col2, usage_col3 = st.columns([1, 2, 1])
+            with usage_col2:
+                count = st.session_state.usage_data.get('count', 0)
+                st.markdown(f"<p style='text-align: center; color: gray;'>Requests this week: <b>{count} / 20</b></p>", unsafe_allow_html=True)
+
+                promo_code = st.text_input(
+                    "Renewal Code",
+                    placeholder="Enter code to reset limit",
+                    label_visibility="collapsed",
+                    key="promo_input"
+                )
+
+                if promo_code == "2026CODERENEWAL":
+                    st.session_state.usage_data['count'] = 0
+                    save_chats_to_local()
+                    st.success("✅ Limit reset successfully!")
+                    st.session_state.promo_input = ""
+                    time.sleep(1)
+                    st.rerun()
+                elif promo_code:
+                    st.error("❌ Invalid code")
     
     with col_config:
         if st.session_state.config_minimized:
@@ -408,10 +486,16 @@ def main():
     
     if user_input:
         add_message("user", user_input)
+
+        # Check request limit
+        if st.session_state.usage_data.get('count', 0) >= 20:
+            add_message("assistant", "⚠️ You have reached your weekly limit of 20 requests. Please enter a renewal code to continue.", "error")
+            st.rerun()
+            return
         
         # Check prerequisites
-        if not st.session_state.mistral_client:
-            add_message("assistant", "Please configure your Mistral AI API key in the sidebar first.", "error")
+        if not st.session_state.ai_client:
+            add_message("assistant", f"Please configure your {st.session_state.ai_provider} AI settings in the sidebar first.", "error")
             st.rerun()
             return
         
@@ -426,9 +510,13 @@ def main():
         
         # Automatically name chat if it's the first message
         if len(st.session_state.messages) <= 1:
-            if st.session_state.mistral_client:
+            if st.session_state.ai_client:
                 with st.spinner("Generating chat title..."):
-                    title = st.session_state.mistral_client.generate_chat_title(user_input)
+                    # Increment usage for title generation too
+                    st.session_state.usage_data['count'] += 1
+                    save_chats_to_local()
+
+                    title = st.session_state.ai_client.generate_chat_title(user_input)
                     st.session_state.chats[st.session_state.current_chat_id]['title'] = title
                     save_chats_to_local()
 

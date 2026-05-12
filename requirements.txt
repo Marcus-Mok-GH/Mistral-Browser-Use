@@ -4,3 +4,4 @@ firecrawl-py
 streamlit
 extra-streamlit-components
 streamlit-local-storage
+requests
