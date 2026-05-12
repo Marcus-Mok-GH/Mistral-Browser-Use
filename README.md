@@ -87,3 +87,13 @@ It keeps the idea simple:
   https://console.mistral.ai/
 
 If you want, future updates can add clearer setup steps, example use-cases, and screenshots so new users can get started even faster.
+
+## Streamlit deployment note (important)
+
+If you deploy on **Streamlit Community Cloud**, Python version is selected in the app's **Advanced settings** (or app settings dashboard).
+
+- `runtime.txt` is **not** used by Community Cloud to pick Python.
+- Set Python explicitly in deployment settings (recommended: **Python 3.12 or 3.14+** for this app).
+- MBU includes automatic compatibility handling for Python 3.14 import edge-cases via the `_import_local_symbol()` function in app.py, so both 3.12 and 3.14+ should work seamlessly.
+- If you experience any import issues, try switching between Python versions in the deployment settings and redeploying.
+

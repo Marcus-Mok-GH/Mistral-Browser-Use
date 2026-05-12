@@ -3,10 +3,32 @@ import os
 import time
 import base64
 from datetime import datetime, timedelta
-from browser_automation import BrowserAutomation
-from mistral_client import MistralClient
-from fireworks_client import FireworksClient
-from element_detector import ElementDetector
+import importlib
+
+
+def _import_local_symbol(module_name, symbol_name):
+    """Import a symbol from a local module with a retry for Python 3.14 import edge-cases.
+
+    Python 3.14 can sometimes raise KeyError during initial import attempts
+    due to changes in the import system. This function retries once after clearing any
+    partially-loaded module state, ensuring compatibility across Python 3.12+ versions.
+    """
+    try:
+        module = importlib.import_module(module_name)
+    except KeyError:
+        # Some Python 3.14 environments can raise KeyError during module loading.
+        # Retry once after clearing a potentially half-loaded module entry.
+        import sys
+        sys.modules.pop(module_name, None)
+        module = importlib.import_module(module_name)
+
+    return getattr(module, symbol_name)
+
+
+BrowserAutomation = _import_local_symbol("browser_automation", "BrowserAutomation")
+MistralClient = _import_local_symbol("mistral_client", "MistralClient")
+FireworksClient = _import_local_symbol("fireworks_client", "FireworksClient")
+ElementDetector = _import_local_symbol("element_detector", "ElementDetector")
 import traceback
 import extra_streamlit_components as stx
 from streamlit_local_storage import LocalStorage
