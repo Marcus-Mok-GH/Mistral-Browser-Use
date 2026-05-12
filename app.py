@@ -17,6 +17,8 @@ def initialize_session_state():
     """Initialize session state variables"""
     if 'messages' not in st.session_state:
         st.session_state.messages = []
+    if 'todos' not in st.session_state:
+        st.session_state.todos = []
     if 'browser' not in st.session_state:
         st.session_state.browser = None
     if 'ai_client' not in st.session_state:
@@ -66,7 +68,8 @@ def save_chats_to_local():
         for cid, chat in st.session_state.chats.items():
             serializable_chats[cid] = {
                 'title': chat.get('title', 'Untitled Chat'),
-                'messages': chat.get('messages', [])
+                'messages': chat.get('messages', []),
+                'todos': chat.get('todos', [])
             }
         st.session_state.local_storage.setItem("mbu_chats", json.dumps(serializable_chats))
 
@@ -106,7 +109,8 @@ def setup_chat_menu():
         new_id = str(uuid.uuid4())
         st.session_state.chats[new_id] = {
             'title': 'New Chat',
-            'messages': []
+            'messages': [],
+            'todos': []
         }
         st.session_state.current_chat_id = new_id
         st.session_state.messages = []
@@ -127,6 +131,7 @@ def setup_chat_menu():
         if col_chat.button(chat_title, key=f"btn_{cid}", use_container_width=True):
             st.session_state.current_chat_id = cid
             st.session_state.messages = chat.get('messages', [])
+            st.session_state.todos = chat.get('todos', [])
 
         if col_del.button("🗑️", key=f"del_{cid}"):
             delete_chat_screenshots(cid)
@@ -134,6 +139,7 @@ def setup_chat_menu():
             if st.session_state.current_chat_id == cid:
                 st.session_state.current_chat_id = None
                 st.session_state.messages = []
+                st.session_state.todos = []
             save_chats_to_local()
 
 def setup_configuration_panel(container):
@@ -350,7 +356,7 @@ def execute_automation_step(user_objective):
         save_chats_to_local()
 
         response = st.session_state.ai_client.analyze_and_decide(
-            image_data, user_objective, st.session_state.current_objective, image_format=image_format
+            image_data, user_objective, st.session_state.current_objective, image_format=image_format, todos=st.session_state.todos
         )
         
         # Parse response
@@ -361,6 +367,7 @@ def execute_automation_step(user_objective):
         add_message("assistant", action, "action")
         
         # Execute action
+        import re
         if action.lower().startswith('click('):
             # Extract index from click(INDEX)
             index_str = action.split('(')[1].split(')')[0]
@@ -373,7 +380,6 @@ def execute_automation_step(user_objective):
         
         elif action.lower().startswith('type('):
             # Extract text and element from type("TEXT", into="ELEMENT") or type('TEXT', into='ELEMENT')
-            import re
             # Match both single and double quotes
             match = re.search(r"type\(['\"](.*?)['\"]\s*,\s*into\s*=\s*['\"](.*?)['\"]\)", action)
             if match:
@@ -384,6 +390,49 @@ def execute_automation_step(user_objective):
             else:
                 raise Exception(f"Invalid type action format: {action}")
         
+        elif action.lower().startswith('todo_add('):
+            match = re.search(r"todo_add\(['\"](.*?)['\"]\)", action)
+            if match:
+                task = match.group(1)
+                st.session_state.todos.append(task)
+                if st.session_state.current_chat_id:
+                    st.session_state.chats[st.session_state.current_chat_id]['todos'] = st.session_state.todos
+                    save_chats_to_local()
+                add_message("assistant", f"Added to-do: {task}")
+            else:
+                raise Exception(f"Invalid todo_add action format: {action}")
+
+        elif action.lower().startswith('todo_edit('):
+            match = re.search(r"todo_edit\((\d+)\s*,\s*['\"](.*?)['\"]\)", action)
+            if match:
+                idx = int(match.group(1))
+                task = match.group(2)
+                if 0 <= idx < len(st.session_state.todos):
+                    st.session_state.todos[idx] = task
+                    if st.session_state.current_chat_id:
+                        st.session_state.chats[st.session_state.current_chat_id]['todos'] = st.session_state.todos
+                        save_chats_to_local()
+                    add_message("assistant", f"Updated to-do at index {idx}: {task}")
+                else:
+                    raise Exception(f"Todo index {idx} out of range")
+            else:
+                raise Exception(f"Invalid todo_edit action format: {action}")
+
+        elif action.lower().startswith('todo_delete('):
+            match = re.search(r"todo_delete\((\d+)\)", action)
+            if match:
+                idx = int(match.group(1))
+                if 0 <= idx < len(st.session_state.todos):
+                    removed = st.session_state.todos.pop(idx)
+                    if st.session_state.current_chat_id:
+                        st.session_state.chats[st.session_state.current_chat_id]['todos'] = st.session_state.todos
+                        save_chats_to_local()
+                    add_message("assistant", f"Deleted to-do: {removed}")
+                else:
+                    raise Exception(f"Todo index {idx} out of range")
+            else:
+                raise Exception(f"Invalid todo_delete action format: {action}")
+
         elif 'complete' in action.lower() or 'done' in action.lower():
             st.session_state.automation_active = False
             add_message("assistant", "🎉 Objective completed successfully!")
@@ -417,7 +466,9 @@ def main():
             # Set current chat if none selected
             if not st.session_state.current_chat_id and st.session_state.chats:
                 st.session_state.current_chat_id = list(st.session_state.chats.keys())[0]
-                st.session_state.messages = st.session_state.chats[st.session_state.current_chat_id].get('messages', [])
+                current_chat = st.session_state.chats[st.session_state.current_chat_id]
+                st.session_state.messages = current_chat.get('messages', [])
+                st.session_state.todos = current_chat.get('todos', [])
 
     setup_chat_menu()
 
@@ -437,6 +488,12 @@ def main():
         else:
             # Main chat interface
             st.write(f"Objective: **{st.session_state.chats[st.session_state.current_chat_id].get('title')}**")
+
+            # Display Todo List if it exists
+            if st.session_state.todos:
+                with st.expander("📝 Todo List", expanded=True):
+                    for i, todo in enumerate(st.session_state.todos):
+                        st.write(f"{i}. {todo}")
 
             # Display chat history
             display_chat_history()
