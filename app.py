@@ -71,10 +71,10 @@ def save_chats_to_local():
                 'messages': chat.get('messages', []),
                 'todos': chat.get('todos', [])
             }
-        st.session_state.local_storage.setItem("mbu_chats", json.dumps(serializable_chats))
+        st.session_state.local_storage.setItem("mbu_chats", json.dumps(serializable_chats, default=str))
 
         # Save usage data
-        st.session_state.local_storage.setItem("mbu_usage", json.dumps(st.session_state.usage_data))
+        st.session_state.local_storage.setItem("mbu_usage", json.dumps(st.session_state.usage_data, default=str))
     except Exception as e:
         print(f"Error saving to localStorage: {e}")
 
@@ -282,7 +282,15 @@ def display_chat_history():
             if message["type"] == "text":
                 st.write(message["content"])
             elif message["type"] == "image":
-                st.image(message["content"], caption=message.get("caption", "Screenshot"))
+                # Only try to display if file exists and is not empty
+                img_path = message["content"]
+                if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                    try:
+                        st.image(img_path, caption=message.get("caption", "Screenshot"))
+                    except Exception as e:
+                        st.error(f"Error displaying image: {e}")
+                else:
+                    st.warning(f"Image not found or empty: {img_path}")
             elif message["type"] == "thinking":
                 st.info(f"🤔 **Thinking:** {message['content']}")
             elif message["type"] == "action":
@@ -296,7 +304,7 @@ def add_message(role, content, msg_type="text", caption=None):
         "role": role,
         "type": msg_type,
         "content": content,
-        "timestamp": datetime.now()
+        "timestamp": datetime.now().isoformat()
     }
     if caption:
         message["caption"] = caption

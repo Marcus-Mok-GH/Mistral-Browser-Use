@@ -55,27 +55,74 @@ class BrowserAutomation:
         
         try:
             # Use playwright-based screenshot
+            # We return the base64 string so it shows up in result.result
             code = """
             const screenshot = await page.screenshot({ fullPage: false });
-            console.log(screenshot.toString('base64'));
+            return screenshot.toString('base64');
             """
             result = self.app.browser_execute(self.session_id, code, language="node")
 
-            # The result object attributes: success, stdout, result, stderr, etc.
             if not result.success:
                 raise Exception(f"Failed to take screenshot: {result.stderr}")
 
-            image_data = result.stdout.strip()
-            # If there's multiple things in stdout, try to find the base64 part
-            if '\n' in image_data:
-                image_data = image_data.split('\n')[-1].strip()
+            # Try to get data from result first, then stdout
+            image_data = None
+            if hasattr(result, 'result') and result.result:
+                image_data = str(result.result).strip()
+            elif hasattr(result, 'stdout') and result.stdout:
+                image_data = result.stdout.strip()
+                # If there's multiple things in stdout, try to find the base64 part
+                if '\n' in image_data:
+                    image_data = image_data.split('\n')[-1].strip()
 
-            image_bytes = base64.b64decode(image_data)
+            if not image_data:
+                raise Exception("No screenshot data received from Firecrawl")
+
+            # Final check for base64 validity/cleaning (in case of logs)
+            import re
+            # Simple check if it looks like base64 - can be long so we don't want to over-regex
+            # But we can try to find the longest block of base64-like characters
+            if not re.match(r'^[A-Za-z0-9+/=]+$', image_data):
+                # Try to find a base64 block. Screenshots are usually large.
+                matches = re.findall(r'[A-Za-z0-9+/=]{100,}', image_data)
+                if matches:
+                    # Pick the longest one, likely the image
+                    image_data = max(matches, key=len)
+
+            # Remove any whitespace that might have been introduced
+            image_data = "".join(image_data.split())
+
+            try:
+                image_bytes = base64.b64decode(image_data)
+            except Exception as e:
+                # If decoding fails, try to pad it
+                missing_padding = len(image_data) % 4
+                if missing_padding:
+                    image_data += '=' * (4 - missing_padding)
+                image_bytes = base64.b64decode(image_data)
+
+            if not image_bytes:
+                raise Exception("Decoded image bytes are empty")
 
             # Detect image format
             try:
-                img = Image.open(io.BytesIO(image_bytes))
-                extension = img.format.lower()
+                # Log first 16 bytes for debugging
+                header_hex = image_bytes[:16].hex()
+                print(f"Image header (hex): {header_hex}")
+
+                # Manual check for common formats if PIL fails or to be sure
+                if header_hex.startswith('89504e470d0a1a0a'):
+                    extension = "png"
+                elif header_hex.startswith('ffd8ff'):
+                    extension = "jpeg"
+                elif header_hex.startswith('52494646') and '57454250' in header_hex: # RIFF ... WEBP
+                    extension = "webp"
+                else:
+                    # Fallback to PIL detection
+                    img = Image.open(io.BytesIO(image_bytes))
+                    extension = img.format.lower()
+
+                print(f"Detected image format: {extension}")
             except Exception as e:
                 print(f"Warning: Could not detect image format, defaulting to png: {e}")
                 extension = "png"
@@ -140,7 +187,7 @@ class BrowserAutomation:
 
             return unique.sort((a, b) => (a.y - b.y) || (a.x - b.x));
         });
-        console.log(JSON.stringify(elements));
+        return elements;
         """
         
         try:
@@ -149,11 +196,17 @@ class BrowserAutomation:
             if not result.success:
                 raise Exception(f"Failed to get elements: {result.stderr}")
 
-            elements_json = result.stdout.strip()
-            if '\n' in elements_json:
-                elements_json = elements_json.split('\n')[-1].strip()
+            elements = None
+            if hasattr(result, 'result') and result.result:
+                elements = result.result
+            elif hasattr(result, 'stdout') and result.stdout:
+                elements_json = result.stdout.strip()
+                if '\n' in elements_json:
+                    elements_json = elements_json.split('\n')[-1].strip()
+                elements = json.loads(elements_json)
 
-            elements = json.loads(elements_json)
+            if elements is None:
+                return {}
 
             self.element_map = {}
             for i, element in enumerate(elements, 1):

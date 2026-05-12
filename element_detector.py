@@ -12,8 +12,17 @@ class ElementDetector:
     def detect_and_annotate_elements(self, screenshot_path, browser_automation=None):
         """Detect interactive elements and annotate them with indexes"""
         try:
+            # Check if file exists and is not empty
+            if not os.path.exists(screenshot_path) or os.path.getsize(screenshot_path) == 0:
+                raise Exception(f"Screenshot file {screenshot_path} is missing or empty")
+
             # Load the screenshot
-            image = Image.open(screenshot_path)
+            try:
+                image = Image.open(screenshot_path)
+                image.verify() # Verify it's an image
+                image = Image.open(screenshot_path) # Re-open because verify() closes the file or moves the pointer
+            except Exception as e:
+                raise Exception(f"Invalid image file {screenshot_path}: {e}")
             
             # Create a copy for annotation
             annotated_image = image.copy()
@@ -73,8 +82,18 @@ class ElementDetector:
     def annotate_elements_with_positions(self, screenshot_path, element_positions):
         """Annotate elements given their positions"""
         try:
+            # Check if file exists and is not empty
+            if not os.path.exists(screenshot_path) or os.path.getsize(screenshot_path) == 0:
+                raise Exception(f"Screenshot file {screenshot_path} is missing or empty")
+
             # Load the screenshot
-            image = Image.open(screenshot_path)
+            try:
+                image = Image.open(screenshot_path)
+                image.verify()
+                image = Image.open(screenshot_path)
+            except Exception as e:
+                raise Exception(f"Invalid image file {screenshot_path}: {e}")
+
             annotated_image = image.copy()
             draw = ImageDraw.Draw(annotated_image)
             
