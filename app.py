@@ -63,8 +63,6 @@ def initialize_session_state():
         st.session_state.current_chat_id = None
     if 'local_storage' not in st.session_state:
         st.session_state.local_storage = LocalStorage()
-    if 'config_minimized' not in st.session_state:
-        st.session_state.config_minimized = False
     if 'usage_data' not in st.session_state:
         st.session_state.usage_data = {
             'count': 0,
@@ -79,8 +77,8 @@ def delete_chat_screenshots(chat_id):
             if msg.get('type') == 'image' and os.path.exists(msg.get('content')):
                 try:
                     os.remove(msg.get('content'))
-                except Exception as e:
-                    print(f"Error deleting screenshot {msg.get('content')}: {e}")
+                except Exception:
+                    pass
 
 def save_chats_to_local():
     """Save all chats and usage data to localStorage"""
@@ -97,8 +95,8 @@ def save_chats_to_local():
 
         # Save usage data
         st.session_state.local_storage.setItem("mbu_usage", json.dumps(st.session_state.usage_data, default=str))
-    except Exception as e:
-        print(f"Error saving to localStorage: {e}")
+    except Exception:
+        pass
 
 def load_chats_from_local():
     """Load all chats and usage data from localStorage"""
@@ -119,15 +117,13 @@ def load_chats_from_local():
         if stored_chats:
             st.session_state.chats = json.loads(stored_chats)
             return True
-    except Exception as e:
-        print(f"Error loading from localStorage: {e}")
+    except Exception:
+        pass
     return False
 
-def setup_chat_menu():
-    """Setup left sidebar for chat management"""
-    st.sidebar.title("💬 Chats")
-    
-    if st.sidebar.button("➕ New Chat", use_container_width=True):
+def setup_chat_menu(container):
+    """Setup chat management menu in a container"""
+    if container.button("➕ New Chat", use_container_width=True):
         new_id = str(uuid.uuid4())
         st.session_state.chats[new_id] = {
             'title': 'New Chat',
@@ -137,12 +133,13 @@ def setup_chat_menu():
         st.session_state.current_chat_id = new_id
         st.session_state.messages = []
         save_chats_to_local()
+        st.rerun()
 
-    st.sidebar.divider()
+    container.divider()
 
     # List existing chats
     for cid, chat in list(st.session_state.chats.items()):
-        col_chat, col_del = st.sidebar.columns([0.8, 0.2])
+        col_chat, col_del = container.columns([0.8, 0.2])
 
         # Highlight current chat
         is_current = (cid == st.session_state.current_chat_id)
@@ -154,6 +151,7 @@ def setup_chat_menu():
             st.session_state.current_chat_id = cid
             st.session_state.messages = chat.get('messages', [])
             st.session_state.todos = chat.get('todos', [])
+            st.rerun()
 
         if col_del.button("🗑️", key=f"del_{cid}"):
             delete_chat_screenshots(cid)
@@ -163,11 +161,10 @@ def setup_chat_menu():
                 st.session_state.messages = []
                 st.session_state.todos = []
             save_chats_to_local()
+            st.rerun()
 
 def setup_configuration_panel(container):
-    """Setup right configuration panel with improved spacing and organization"""
-    # Title is now handled in the main layout for better control with the minimize button
-    
+    """Setup configuration panel with improved spacing and organization"""
     cookie_manager = stx.CookieManager()
 
     cookies = cookie_manager.get_all()
@@ -211,7 +208,6 @@ def setup_configuration_panel(container):
             mistral_api_key = st.text_input(
                 "Mistral API Key",
                 value=st.session_state.mistral_api_key,
-                type="password",
                 help="Enter your Mistral AI API key",
                 key="mistral_input"
             )
@@ -245,7 +241,6 @@ def setup_configuration_panel(container):
         firecrawl_api_key = st.text_input(
             "Firecrawl API Key",
             value=st.session_state.firecrawl_api_key,
-            type="password",
             help="Enter your Firecrawl API key",
             key="firecrawl_input"
         )
@@ -345,11 +340,10 @@ def take_screenshot_and_analyze():
         
         # Take screenshot
         screenshot_path = st.session_state.browser.take_screenshot()
-        add_message("assistant", screenshot_path, "image", "Current page screenshot")
         
         # Detect and highlight elements
         annotated_image_path = st.session_state.element_detector.detect_and_annotate_elements(screenshot_path, st.session_state.browser)
-        add_message("assistant", annotated_image_path, "image", "Elements detected and indexed")
+        add_message("assistant", annotated_image_path, "image")
         
         return annotated_image_path
         
@@ -474,7 +468,7 @@ def execute_automation_step(user_objective):
         return True
         
     except Exception as e:
-        error_msg = f"Automation step failed: {str(e)}\n{traceback.format_exc()}"
+        error_msg = f"Automation step failed: {str(e)}"
         add_message("assistant", error_msg, "error")
         st.session_state.automation_active = False
         return False
@@ -500,14 +494,19 @@ def main():
                 st.session_state.messages = current_chat.get('messages', [])
                 st.session_state.todos = current_chat.get('todos', [])
 
-    setup_chat_menu()
+    # Sidebar with tabs for Chats and Configuration
+    with st.sidebar:
+        st.title("🛠️ Control Center")
+        tab_chats, tab_config = st.tabs(["💬 Chats", "⚙️ Config"])
 
-    # Layout: adjusted ratios for a wider config panel when expanded
-    if st.session_state.config_minimized:
-        col_main, col_config = st.columns([10, 1])
-    else:
-        # Wider configuration panel (e.g., [2, 1] instead of [3, 1])
-        col_main, col_config = st.columns([2, 1])
+        with tab_chats:
+            setup_chat_menu(st.container())
+
+        with tab_config:
+            setup_configuration_panel(st.container())
+
+    # Main layout
+    col_main = st.container()
     
     with col_main:
         st.title("🤖 Web Automation Assistant")
@@ -517,7 +516,6 @@ def main():
             st.info("👈 Please start a new chat or select an existing one from the menu.")
         else:
             # Main chat interface
-            st.write(f"Objective: **{st.session_state.chats[st.session_state.current_chat_id].get('title')}**")
 
             # Display Todo List if it exists
             if st.session_state.todos:
@@ -555,21 +553,6 @@ def main():
                 elif promo_code:
                     st.error("❌ Invalid code")
     
-    with col_config:
-        if st.session_state.config_minimized:
-            # Expand button when minimized
-            st.button("<", help="Expand Configuration", key="expand_btn", on_click=lambda: st.session_state.update({"config_minimized": False}))
-        else:
-            # Layout for Minimize button and Title
-            # Adjusted ratio to give the button more space and prevent title wrapping
-            top_col1, top_col2 = st.columns([0.25, 0.75])
-            with top_col1:
-                st.button(">", help="Minimize Configuration", key="minimize_btn", on_click=lambda: st.session_state.update({"config_minimized": True}))
-            with top_col2:
-                # Removed redundant icon to save horizontal space
-                st.markdown("### Configuration")
-
-            setup_configuration_panel(st.container())
     
     if user_input:
         add_message("user", user_input)
@@ -615,7 +598,6 @@ def main():
         
         while st.session_state.automation_active and step_count < max_steps:
             step_count += 1
-            add_message("assistant", f"--- Step {step_count} ---")
             
             success = execute_automation_step(user_input)
             if not success:

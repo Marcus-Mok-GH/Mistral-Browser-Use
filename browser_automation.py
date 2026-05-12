@@ -36,16 +36,12 @@ class BrowserAutomation:
                 error_msg = getattr(response, 'error', 'Unknown error') if hasattr(response, 'error') else 'Failed to get session ID'
                 raise Exception(f"Failed to start Firecrawl browser: {error_msg}")
             
-            print(f"Firecrawl browser session started: {self.session_id}")
-            
             # Navigate to a default page
             self.navigate_to('https://www.google.com')
             
             return True
             
         except Exception as e:
-            print(f"Failed to start Firecrawl browser: {str(e)}")
-            print(traceback.format_exc())
             raise e
     
     def take_screenshot(self):
@@ -106,9 +102,7 @@ class BrowserAutomation:
 
             # Detect image format
             try:
-                # Log first 16 bytes for debugging
                 header_hex = image_bytes[:16].hex()
-                print(f"Image header (hex): {header_hex}")
 
                 # Manual check for common formats if PIL fails or to be sure
                 if header_hex.startswith('89504e470d0a1a0a'):
@@ -122,9 +116,7 @@ class BrowserAutomation:
                     img = Image.open(io.BytesIO(image_bytes))
                     extension = img.format.lower()
 
-                print(f"Detected image format: {extension}")
-            except Exception as e:
-                print(f"Warning: Could not detect image format, defaulting to png: {e}")
+            except Exception:
                 extension = "png"
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -138,7 +130,6 @@ class BrowserAutomation:
             return filepath
 
         except Exception as e:
-            print(f"Error taking screenshot: {str(e)}")
             raise e
     
     def get_interactable_elements(self):
@@ -214,8 +205,7 @@ class BrowserAutomation:
 
             return self.element_map
 
-        except Exception as e:
-            print(f"Error getting elements: {str(e)}")
+        except Exception:
             return {}
     
     def click_element_by_index(self, index):
@@ -342,4 +332,3 @@ class BrowserAutomation:
                 pass
             self.session_id = None
             self.element_map = {}
-            print("Firecrawl browser session closed")
