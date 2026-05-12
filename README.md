@@ -87,3 +87,12 @@ It keeps the idea simple:
   https://console.mistral.ai/
 
 If you want, future updates can add clearer setup steps, example use-cases, and screenshots so new users can get started even faster.
+
+## Streamlit deployment note (important)
+
+If you deploy on **Streamlit Community Cloud**, Python version is selected in the app's **Advanced settings** (or app settings dashboard).
+
+- `runtime.txt` is **not** used by Community Cloud to pick Python.
+- Set Python explicitly in deployment settings (recommended: **3.12** for this app today).
+- If logs show `/venv/lib/python3.14/...` and startup import errors, switch the app's Python version in settings and redeploy.
+
