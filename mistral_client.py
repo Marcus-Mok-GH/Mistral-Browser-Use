@@ -12,29 +12,42 @@ class MistralClient:
         if not self.api_key:
             raise ValueError("Mistral API key is required")
     
-    def analyze_and_decide(self, image_base64, user_objective, current_context=None, image_format="png"):
+    def analyze_and_decide(self, image_base64, user_objective, current_context=None, image_format="png", todos=None):
         """Analyze screenshot and decide on next action"""
         
+        todos_str = ""
+        if todos:
+            todos_str = "\n".join([f"{i}. {todo}" for i, todo in enumerate(todos)])
+        else:
+            todos_str = "No todos currently."
+
         # Construct the prompt for analysis
-        system_prompt = """You are a web automation assistant powered by computer vision. Your task is to analyze screenshots of web pages and determine the next action to take to achieve the user's objective.
+        system_prompt = f"""You are a web automation assistant powered by computer vision. Your task is to analyze screenshots of web pages and determine the next action to take to achieve the user's objective.
 
 AVAILABLE ACTIONS:
 - click(INDEX) - Click on an element by its numbered index (shown in red circles)
 - type("TEXT", into="ELEMENT") - Type text into an input field (specify element by description)
+- todo_add("TASK") - Add a new task to your todo list
+- todo_edit(INDEX, "TASK") - Edit an existing task in your todo list
+- todo_delete(INDEX) - Delete a task from your todo list
 - COMPLETE - When the objective is achieved
+
+CURRENT TODO LIST:
+{todos_str}
 
 RESPONSE FORMAT:
 Return a JSON object with exactly these fields:
-{
+{{
     "thinking": "Your reasoning about what you see and what to do next",
-    "action": "The specific action to take (e.g., click(5) or type('hello', into='search box') or COMPLETE)"
-}
+    "action": "The specific action to take (e.g., click(5) or todo_add('Search for flight') or COMPLETE)"
+}}
 
 GUIDELINES:
 - Carefully examine all numbered elements in the image
 - Choose the most logical next step toward the objective
 - Be specific with element indexes when clicking
 - For typing, describe the target element clearly
+- Use the todo list to break down long or complex tasks. DON'T force a todo list at the start, only use it when it helps you stay organized.
 - If the objective appears complete, respond with action: "COMPLETE"
 - Always explain your reasoning in the thinking field"""
 
