@@ -75,8 +75,7 @@ class ElementDetector:
             
             return annotated_path
             
-        except Exception as e:
-            print(f"Error in element detection: {str(e)}")
+        except Exception:
             return screenshot_path  # Return original if annotation fails
     
     def annotate_elements_with_positions(self, screenshot_path, element_positions):
@@ -139,8 +138,7 @@ class ElementDetector:
             
             return annotated_path
             
-        except Exception as e:
-            print(f"Error in element annotation: {str(e)}")
+        except Exception:
             return screenshot_path
     
     def get_element_positions_from_browser(self, browser_automation):
@@ -166,8 +164,7 @@ class ElementDetector:
             
             return positions
             
-        except Exception as e:
-            print(f"Error getting element positions: {str(e)}")
+        except Exception:
             return {}
     
     def create_annotated_screenshot(self, browser_automation):
@@ -183,7 +180,6 @@ class ElementDetector:
             positions = self.get_element_positions_from_browser(browser_automation)
             
             if not positions:
-                print("No elements detected for annotation")
                 return screenshot_path
             
             # Annotate with positions
@@ -191,6 +187,5 @@ class ElementDetector:
             
             return annotated_path
             
-        except Exception as e:
-            print(f"Error creating annotated screenshot: {str(e)}")
+        except Exception:
             return None

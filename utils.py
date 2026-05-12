@@ -27,8 +27,7 @@ def save_json_data(data, filepath):
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
         return True
-    except Exception as e:
-        print(f"Failed to save JSON data: {str(e)}")
+    except Exception:
         return False
 
 def load_json_data(filepath):
@@ -36,8 +35,7 @@ def load_json_data(filepath):
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except Exception as e:
-        print(f"Failed to load JSON data: {str(e)}")
+    except Exception:
         return None
 
 def clean_old_screenshots(directory='screenshots', max_files=50):
@@ -60,12 +58,11 @@ def clean_old_screenshots(directory='screenshots', max_files=50):
             oldest_file = files.pop(0)
             try:
                 os.remove(oldest_file[0])
-                print(f"Removed old screenshot: {oldest_file[0]}")
             except:
                 pass
                 
-    except Exception as e:
-        print(f"Error cleaning old screenshots: {str(e)}")
+    except Exception:
+        pass
 
 def validate_url(url):
     """Validate and normalize URL"""
@@ -84,15 +81,6 @@ def validate_url(url):
     
     return url
 
-def get_system_info():
-    """Get basic system information for debugging"""
-    info = {
-        'platform': platform.system(),
-        'architecture': platform.architecture(),
-        'python_version': platform.python_version()
-    }
-    return info
-
 def format_error_message(error, context=""):
     """Format error message for user display"""
     error_str = str(error)
@@ -109,32 +97,3 @@ def format_error_message(error, context=""):
     else:
         return f"An error occurred: {error_str} {context}"
 
-def log_automation_step(step_number, action, result, timestamp=None):
-    """Log automation steps for debugging"""
-    if timestamp is None:
-        timestamp = datetime.now()
-    
-    log_entry = {
-        'step': step_number,
-        'timestamp': timestamp.isoformat(),
-        'action': action,
-        'result': result
-    }
-    
-    # Ensure logs directory exists
-    ensure_directory_exists('logs')
-    
-    # Save to log file
-    log_file = os.path.join('logs', f"automation_{generate_timestamp()}.json")
-    
-    try:
-        logs = []
-        if os.path.exists(log_file):
-            logs = load_json_data(log_file) or []
-        
-        logs.append(log_entry)
-        save_json_data(logs, log_file)
-    except:
-        pass  # Don't fail automation if logging fails
-    
-    return log_entry
